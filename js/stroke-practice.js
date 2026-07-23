@@ -55,6 +55,61 @@ var StrokePractice = (function () {
 
   var CONFETTI_COLORS = ["#ffd23f", "#ff5a5a", "#3a8bff", "#4ee08a", "#c17bff", "#ff9f4a", "#4adede"];
 
+  // なぞり判定のゆるさ（SVG座標系 viewBox 0 0 109 109 の単位）
+  var START_TOLERANCE = 18; // 指を置く場所が「画のはじまり」からどれだけ離れてもOKか
+  var END_TOLERANCE = 18; // 指を離す場所が「画のおわり」からどれだけ離れてもOKか
+  var MOVE_TOLERANCE = 16; // なぞっている途中、線からどれだけ離れてもOKか
+  var PROGRESS_RATIO = 0.6; // 画の長さのうち、正しい方向に何割なぞれていれば正解にするか
+  var PATH_SAMPLES = 48; // 最近接点をさがすときの分割数
+
+  // iOS 12など古いSafariはPointer Events未対応のため、その場合はTouch Eventsで代替する
+  var SUPPORTS_POINTER_EVENTS = typeof window !== "undefined" && !!window.PointerEvent;
+
+  // pointerup(新しい端末)かclick(Pointer Events非対応の古い端末)で共通のタップ処理を登録する
+  function bindTap(el, handler) {
+    el.addEventListener(SUPPORTS_POINTER_EVENTS ? "pointerup" : "click", handler);
+  }
+
+  function findTouchById(touchList, id) {
+    for (var i = 0; i < touchList.length; i++) {
+      if (touchList[i].identifier === id) {
+        return touchList[i];
+      }
+    }
+    return null;
+  }
+
+  function toSvgPoint(svg, clientX, clientY) {
+    var pt = svg.createSVGPoint();
+    pt.x = clientX;
+    pt.y = clientY;
+    var ctm = svg.getScreenCTM();
+    if (!ctm) {
+      return { x: 0, y: 0 };
+    }
+    var loc = pt.matrixTransform(ctm.inverse());
+    return { x: loc.x, y: loc.y };
+  }
+
+  // pathEl上で(x, y)に一番近い点までの距離と、そこまでの弧長を返す
+  function nearestOnPath(pathEl, x, y) {
+    var total = pathEl.getTotalLength();
+    var bestDist = Infinity;
+    var bestLen = 0;
+    for (var s = 0; s <= PATH_SAMPLES; s++) {
+      var len = (total * s) / PATH_SAMPLES;
+      var p = pathEl.getPointAtLength(len);
+      var dx = p.x - x;
+      var dy = p.y - y;
+      var d = dx * dx + dy * dy;
+      if (d < bestDist) {
+        bestDist = d;
+        bestLen = len;
+      }
+    }
+    return { dist: Math.sqrt(bestDist), length: bestLen, total: total };
+  }
+
   function renderConfetti() {
     var html = "";
     for (var c = 0; c < 18; c++) {
@@ -106,6 +161,7 @@ var StrokePractice = (function () {
     var mistakes = 0;
     var finished = false;
     var robotState = null;
+    var drag = null; // なぞり操作の進行状況
 
     function renderGuidePaths() {
       return strokes.map(function (d) {
@@ -133,6 +189,61 @@ var StrokePractice = (function () {
       return order.map(function (i) {
         return '<path class="stroke-hit" data-hit-index="' + i + '" d="' + strokes[i] + '"/>';
       }).join("");
+    }
+
+    // 今なぞっている画を、進んだぶんだけインクが伸びて見えるようにするプレビュー用の線
+    function renderLivePath() {
+      if (finished) {
+        return "";
+      }
+      return '<path class="stroke-active stroke-live" id="strokeLivePath" d="' + strokes[expected] + '"/>';
+    }
+
+    function resetLivePath() {
+      var live = document.getElementById("strokeLivePath");
+      if (live) {
+        var len = live.getTotalLength();
+        live.style.strokeDasharray = len;
+        live.style.strokeDashoffset = len;
+      }
+      return live;
+    }
+
+    function updateLivePreview(pt) {
+      if (!drag) {
+        return;
+      }
+      var info = nearestOnPath(drag.guideEl, pt.x, pt.y);
+      if (info.dist <= MOVE_TOLERANCE) {
+        drag.maxProgress = Math.max(drag.maxProgress, info.length);
+      }
+      if (drag.liveEl) {
+        drag.liveEl.style.strokeDashoffset = drag.total - drag.maxProgress;
+      }
+    }
+
+    function advanceStroke() {
+      expected++;
+      Sound.pikon();
+      if (expected >= total) {
+        finished = true;
+        robotState = opts.onComplete ? opts.onComplete() : null;
+        if (robotState && robotState.justCompleted) {
+          Sound.robotComplete();
+        } else {
+          Sound.combo(4);
+        }
+      }
+      render();
+    }
+
+    function failAttempt(message) {
+      mistakes++;
+      Sound.incorrect();
+      var box = document.getElementById("strokeFeedback");
+      if (box) {
+        box.textContent = message || "ちがうよ、もういちど！";
+      }
     }
 
     function animateNewestStroke() {
@@ -166,7 +277,7 @@ var StrokePractice = (function () {
         (reading ? '<span class="stroke-reading">（' + reading + '）</span>' : '') + '</div>';
       html += '<div class="stroke-progress">' + total + '画中 ' + expected + '画目</div>';
       html += '<div class="stroke-svg-wrap"><svg viewBox="0 0 109 109" class="stroke-svg">' +
-        renderGuidePaths() + renderCompletedPaths() + renderHitPaths() + '</svg></div>';
+        renderGuidePaths() + renderCompletedPaths() + renderLivePath() + renderHitPaths() + '</svg></div>';
       html += '<div class="stroke-feedback" id="strokeFeedback"></div>';
       if (finished) {
         html += '<div class="stroke-clear' + (mistakes === 0 ? " perfect" : "") + '">' +
@@ -185,43 +296,149 @@ var StrokePractice = (function () {
       html += '<button type="button" class="back-btn" id="exitBtn">' + exitLabel + '</button>';
       container.innerHTML = html;
       animateNewestStroke();
+      resetLivePath();
 
       if (!finished) {
-        container.querySelectorAll(".stroke-hit").forEach(function (path) {
-          path.addEventListener("click", function () {
-            var tapped = Number(path.getAttribute("data-hit-index"));
-            if (tapped === expected) {
-              expected++;
-              Sound.pikon();
-              if (expected >= total) {
-                finished = true;
-                robotState = opts.onComplete ? opts.onComplete() : null;
-                if (robotState && robotState.justCompleted) {
-                  Sound.robotComplete();
-                } else {
-                  Sound.combo(4);
-                }
+        var svgRoot = container.querySelector(".stroke-svg");
+        var guidePaths = container.querySelectorAll(".stroke-guide");
+
+        // なぞり開始・移動・終了・中断の判定ロジックは、Pointer Events / Touch Events の
+        // どちらから呼ばれても共通で使う（配線部分だけがAPIごとに分かれる）
+        function tryStartDrag(hitPath, id, clientX, clientY) {
+          var tapped = Number(hitPath.getAttribute("data-hit-index"));
+          if (tapped !== expected) {
+            failAttempt();
+            return false;
+          }
+          var guideEl = guidePaths[expected];
+          var totalLen = guideEl.getTotalLength();
+          var pt = toSvgPoint(svgRoot, clientX, clientY);
+          var startPt = guideEl.getPointAtLength(0);
+          var dx = pt.x - startPt.x;
+          var dy = pt.y - startPt.y;
+          if (Math.sqrt(dx * dx + dy * dy) > START_TOLERANCE) {
+            failAttempt("かきはじめの てんから なぞってね！");
+            return false;
+          }
+          drag = {
+            id: id,
+            guideEl: guideEl,
+            total: totalLen,
+            maxProgress: 0,
+            liveEl: document.getElementById("strokeLivePath")
+          };
+          updateLivePreview(pt);
+          return true;
+        }
+
+        function continueDrag(id, clientX, clientY) {
+          if (!drag || id !== drag.id) {
+            return;
+          }
+          updateLivePreview(toSvgPoint(svgRoot, clientX, clientY));
+        }
+
+        function endDrag(id, clientX, clientY) {
+          if (!drag || id !== drag.id) {
+            return;
+          }
+          var activeDrag = drag;
+          drag = null;
+          var pt = toSvgPoint(svgRoot, clientX, clientY);
+          var endPt = activeDrag.guideEl.getPointAtLength(activeDrag.total);
+          var dx = pt.x - endPt.x;
+          var dy = pt.y - endPt.y;
+          var reachedEnd = Math.sqrt(dx * dx + dy * dy) <= END_TOLERANCE;
+          var coveredEnough = activeDrag.maxProgress >= activeDrag.total * PROGRESS_RATIO;
+          if (reachedEnd && coveredEnough) {
+            advanceStroke();
+          } else {
+            failAttempt("さいごまで ただしい むきで なぞってね！");
+            resetLivePath();
+          }
+        }
+
+        function cancelDrag(id) {
+          if (!drag || id !== drag.id) {
+            return;
+          }
+          drag = null;
+          resetLivePath();
+        }
+
+        container.querySelectorAll(".stroke-hit").forEach(function (hitPath) {
+          if (SUPPORTS_POINTER_EVENTS) {
+            hitPath.addEventListener("pointerdown", function (evt) {
+              var started = tryStartDrag(hitPath, evt.pointerId, evt.clientX, evt.clientY);
+              if (started) {
+                evt.preventDefault();
+                hitPath.setPointerCapture(evt.pointerId);
               }
-              render();
-            } else {
-              mistakes++;
-              Sound.incorrect();
-              var box = document.getElementById("strokeFeedback");
-              if (box) {
-                box.textContent = "ちがうよ、もういちど！";
+            });
+            hitPath.addEventListener("pointermove", function (evt) {
+              if (!drag || evt.pointerId !== drag.id) {
+                return;
               }
-            }
-          });
+              evt.preventDefault();
+              continueDrag(evt.pointerId, evt.clientX, evt.clientY);
+            });
+            hitPath.addEventListener("pointerup", function (evt) {
+              evt.preventDefault();
+              endDrag(evt.pointerId, evt.clientX, evt.clientY);
+            });
+            hitPath.addEventListener("pointercancel", function (evt) {
+              cancelDrag(evt.pointerId);
+            });
+          } else {
+            // iOS 12など古いSafari向けのフォールバック
+            hitPath.addEventListener("touchstart", function (evt) {
+              var t = evt.changedTouches[0];
+              var started = tryStartDrag(hitPath, t.identifier, t.clientX, t.clientY);
+              if (started) {
+                evt.preventDefault();
+              }
+            }, { passive: false });
+            hitPath.addEventListener("touchmove", function (evt) {
+              if (!drag) {
+                return;
+              }
+              var t = findTouchById(evt.changedTouches, drag.id);
+              if (!t) {
+                return;
+              }
+              evt.preventDefault();
+              continueDrag(drag.id, t.clientX, t.clientY);
+            }, { passive: false });
+            hitPath.addEventListener("touchend", function (evt) {
+              if (!drag) {
+                return;
+              }
+              var t = findTouchById(evt.changedTouches, drag.id);
+              if (!t) {
+                return;
+              }
+              endDrag(drag.id, t.clientX, t.clientY);
+            });
+            hitPath.addEventListener("touchcancel", function () {
+              if (!drag) {
+                return;
+              }
+              cancelDrag(drag.id);
+            });
+          }
         });
       }
 
-      document.getElementById("exitBtn").addEventListener("click", function () {
+      // なぞり操作(pointerup)の直後にinnerHTMLで挿入されたボタンは、iOS Safariで
+      // "click"の合成イベントが一度目のタップで発火しないことがあるためpointerupで拾う
+      // （Pointer Events非対応の古いSafariではclickにフォールバック）
+      bindTap(document.getElementById("exitBtn"), function () {
         opts.onExit();
       });
       if (finished) {
-        document.getElementById("retryBtn").addEventListener("click", resetPractice);
+        bindTap(document.getElementById("retryBtn"), resetPractice);
         if (opts.onNext) {
-          document.getElementById("nextQBtn").addEventListener("click", function () {
+          bindTap(document.getElementById("nextQBtn"), function () {
             opts.onNext();
           });
         }

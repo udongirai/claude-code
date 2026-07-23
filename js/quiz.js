@@ -88,6 +88,52 @@ var Quiz = (function () {
       setTimeout(next, 1200);
     }
 
+    function renderHissan(q) {
+      var topBox = q.op === "add" ? "carry" : "borrow";
+      var topLabel = q.op === "add" ? "くりあがり" : "くりさがり";
+      var html = '<div class="hissan-wrap">';
+      html += '<div class="hissan-cell"></div>' +
+        '<div class="hissan-top-cell">' +
+        '<div class="hissan-top-label">' + topLabel + '</div>' +
+        '<div class="hissan-carry-box" data-box="' + topBox + '"></div>' +
+        '</div>' +
+        '<div class="hissan-cell"></div>';
+      html += '<div class="hissan-cell"></div>' +
+        '<div class="hissan-digit-wrap">' +
+        '<span class="hissan-digit">' + q.tensA + '</span>' +
+        '<span class="hissan-strike" id="hissanStrike"></span>' +
+        '</div>' +
+        '<div class="hissan-digit-wrap">' +
+        '<span class="hissan-borrowed-ten" id="hissanBorrowedTen"></span>' +
+        '<span class="hissan-digit">' + q.onesA + '</span>' +
+        '</div>';
+      html += '<div class="hissan-op">' + (q.op === "add" ? "＋" : "－") + '</div>' +
+        '<div class="hissan-digit">' + q.tensB + '</div>' +
+        '<div class="hissan-digit">' + q.onesB + '</div>';
+      html += '<div class="hissan-line"></div>';
+      html += '<div class="hissan-cell"></div>' +
+        '<div class="hissan-box" data-box="answerTens"></div>' +
+        '<div class="hissan-box" data-box="answerOnes"></div>';
+      html += '</div>';
+      return html;
+    }
+
+    function renderDigitPad(withDisplay) {
+      var html = "";
+      if (withDisplay) {
+        html += '<div class="numpad-display" id="numpadDisplay"></div>';
+      }
+      html += '<div class="numpad-grid">';
+      [1, 2, 3, 4, 5, 6, 7, 8, 9].forEach(function (n) {
+        html += '<button type="button" class="numpad-btn" data-num="' + n + '">' + n + '</button>';
+      });
+      html += '<button type="button" class="numpad-btn numpad-clear" data-action="clear">けす</button>';
+      html += '<button type="button" class="numpad-btn" data-num="0">0</button>';
+      html += '<button type="button" class="numpad-btn numpad-ok" data-action="submit">こたえる</button>';
+      html += '</div>';
+      return html;
+    }
+
     function render() {
       locked = false;
       var q = questions[index];
@@ -97,6 +143,8 @@ var Quiz = (function () {
       if (q.subPrompt) {
         html += '<div class="quiz-passage">' + q.prompt + '</div>';
         html += '<div class="quiz-prompt">' + q.subPrompt + '</div>';
+      } else if (q.type === "hissan") {
+        html += '<div class="quiz-prompt">' + q.prompt + '</div>';
       } else {
         html += '<div class="quiz-prompt quiz-prompt-large">' + q.prompt + '</div>';
       }
@@ -109,15 +157,10 @@ var Quiz = (function () {
         });
         html += '</div>';
       } else if (q.type === "numpad") {
-        html += '<div class="numpad-display" id="numpadDisplay"></div>';
-        html += '<div class="numpad-grid">';
-        [1, 2, 3, 4, 5, 6, 7, 8, 9].forEach(function (n) {
-          html += '<button type="button" class="numpad-btn" data-num="' + n + '">' + n + '</button>';
-        });
-        html += '<button type="button" class="numpad-btn numpad-clear" data-action="clear">けす</button>';
-        html += '<button type="button" class="numpad-btn" data-num="0">0</button>';
-        html += '<button type="button" class="numpad-btn numpad-ok" data-action="submit">こたえる</button>';
-        html += '</div>';
+        html += renderDigitPad(true);
+      } else if (q.type === "hissan") {
+        html += renderHissan(q);
+        html += renderDigitPad(false);
       }
       html += '</div>';
       container.innerHTML = html;
@@ -147,6 +190,91 @@ var Quiz = (function () {
               entered += btn.getAttribute("data-num");
             }
             display.textContent = entered === "" ? "＿" : entered;
+          });
+        });
+      } else if (q.type === "hissan") {
+        var boxOrder = q.op === "add"
+          ? ["answerOnes", "answerTens"]
+          : ["borrow", "answerOnes", "answerTens"];
+        var values = {};
+        var selected = boxOrder[0];
+
+        function boxEl(name) {
+          return container.querySelector('[data-box="' + name + '"]');
+        }
+
+        function refreshBoxes() {
+          boxOrder.forEach(function (name) {
+            var el = boxEl(name);
+            if (!el) return;
+            el.textContent = values[name] || "";
+            el.classList.toggle("selected", name === selected);
+          });
+          if (q.op === "add") {
+            var carryEl = boxEl("carry");
+            if (carryEl) {
+              carryEl.textContent = values.carry || "";
+            }
+          }
+          if (q.op === "sub") {
+            var hasBorrow = values.borrow !== undefined && values.borrow !== "";
+            var strike = document.getElementById("hissanStrike");
+            var borrowedTen = document.getElementById("hissanBorrowedTen");
+            if (strike) {
+              strike.classList.toggle("show", hasBorrow);
+            }
+            if (borrowedTen) {
+              // ボックスには「かりたあとの十の位」を入れる想定なので、
+              // もとの十の位との差が「一の位に くりさがってきた かず」になる
+              borrowedTen.textContent = hasBorrow ? String(q.tensA - Number(values.borrow)) : "";
+              borrowedTen.classList.toggle("show", hasBorrow);
+            }
+          }
+        }
+
+        refreshBoxes();
+
+        boxOrder.forEach(function (name) {
+          var el = boxEl(name);
+          if (el) {
+            el.addEventListener("click", function () {
+              if (locked) return;
+              selected = name;
+              refreshBoxes();
+            });
+          }
+        });
+
+        container.querySelectorAll(".numpad-btn").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            if (locked) return;
+            var action = btn.getAttribute("data-action");
+            if (action === "clear") {
+              values[selected] = "";
+              if (q.op === "add" && selected === "answerOnes") {
+                values.carry = "";
+              }
+              refreshBoxes();
+            } else if (action === "submit") {
+              var allFilled = boxOrder.every(function (name) {
+                return values[name];
+              });
+              if (!allFilled) return;
+              var correct = boxOrder.every(function (name) {
+                return values[name] === String(q[name]);
+              });
+              showFeedback(correct, q.answer);
+            } else {
+              values[selected] = btn.getAttribute("data-num");
+              if (q.op === "add" && selected === "answerOnes") {
+                values.carry = String(q.carry);
+              }
+              var idx = boxOrder.indexOf(selected);
+              if (idx !== -1 && idx < boxOrder.length - 1) {
+                selected = boxOrder[idx + 1];
+              }
+              refreshBoxes();
+            }
           });
         });
       }

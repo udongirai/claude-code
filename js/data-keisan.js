@@ -12,24 +12,50 @@ var DataKeisan = (function () {
     return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 
-  // 繰り上がりのある足し算（答えは100まで）
+  // 繰り上がりのある足し算の筆算（2桁+2桁、答えは2桁におさまるものだけ）
   function makeAddition() {
     var a, b;
     do {
       a = randInt(10, 89);
       b = randInt(2, 89);
-    } while ((a % 10) + (b % 10) < 10 || a + b > 100);
-    return { type: "numpad", prompt: a + " + " + b, answer: String(a + b) };
+    } while ((a % 10) + (b % 10) < 10 || a + b >= 100);
+    var sum = a + b;
+    return {
+      type: "hissan",
+      op: "add",
+      prompt: "ひっさんで けいさんしよう",
+      tensA: Math.floor(a / 10),
+      onesA: a % 10,
+      tensB: Math.floor(b / 10),
+      onesB: b % 10,
+      carry: 1,
+      answerTens: Math.floor(sum / 10),
+      answerOnes: sum % 10,
+      answer: String(sum)
+    };
   }
 
-  // 繰り下がりのある引き算（2桁 - 2桁、借りが必要なもの）
+  // 繰り下がりのある引き算の筆算（2桁 - 2桁、一の位で借りが必要なもの）
   function makeSubtraction() {
     var a, b;
     do {
       a = randInt(11, 99);
       b = randInt(10, a - 1);
     } while ((a % 10) >= (b % 10));
-    return { type: "numpad", prompt: a + " - " + b, answer: String(a - b) };
+    var diff = a - b;
+    return {
+      type: "hissan",
+      op: "sub",
+      prompt: "ひっさんで けいさんしよう",
+      tensA: Math.floor(a / 10),
+      onesA: a % 10,
+      tensB: Math.floor(b / 10),
+      onesB: b % 10,
+      borrow: Math.floor(a / 10) - 1,
+      answerTens: Math.floor(diff / 10),
+      answerOnes: diff % 10,
+      answer: String(diff)
+    };
   }
 
   function getQuestions(count) {

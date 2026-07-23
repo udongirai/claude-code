@@ -240,6 +240,8 @@ h2 {
 }
 
 .stroke-svg {
+  width: 320px;
+  height: 320px;
   width: clamp(260px, 82vw, 380px);
   height: clamp(260px, 82vw, 380px);
   background: #1a2242;
@@ -641,6 +643,135 @@ h2 {
   box-shadow: 0 2px 0 #0d3a8f;
 }
 
+.hissan-wrap {
+  display: grid;
+  grid-template-columns: minmax(32px, auto) minmax(52px, auto) minmax(52px, auto);
+  row-gap: 8px;
+  column-gap: 4px;
+  justify-content: center;
+  align-items: center;
+}
+
+.hissan-cell {
+  width: 100%;
+}
+
+.hissan-digit {
+  font-size: 2rem;
+  font-weight: 900;
+  text-align: center;
+  color: #eef1fb;
+  line-height: 1.2;
+}
+
+.hissan-op {
+  font-size: 1.6rem;
+  font-weight: 900;
+  text-align: center;
+  color: #9db3e8;
+  line-height: 1.2;
+}
+
+.hissan-top-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.hissan-top-label {
+  font-size: 0.65rem;
+  font-weight: bold;
+  color: #6f80b3;
+  white-space: nowrap;
+}
+
+.hissan-digit-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hissan-strike {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 150%;
+  height: 3px;
+  background: #ff5a5a;
+  border-radius: 2px;
+  transform: translate(-50%, -50%) rotate(-28deg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.hissan-strike.show {
+  opacity: 1;
+}
+
+.hissan-borrowed-ten {
+  position: absolute;
+  top: -2px;
+  left: -14px;
+  font-size: 1rem;
+  font-weight: 900;
+  color: #ffd23f;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.hissan-borrowed-ten.show {
+  opacity: 1;
+}
+
+.hissan-line {
+  grid-column: 1 / 4;
+  border-top: 3px solid #9db3e8;
+  width: 100%;
+}
+
+.hissan-carry-box {
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 3px;
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: #ffd23f;
+  border: 2px dashed #6f80b3;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.hissan-box {
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  min-height: 52px;
+  padding: 4px;
+  font-size: 2rem;
+  font-weight: 900;
+  color: #ffd23f;
+  background: #202a52;
+  border: 2px solid #3a4a8a;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.hissan-carry-box.selected,
+.hissan-box.selected {
+  border-color: #ffd23f;
+  box-shadow: 0 0 12px rgba(255, 210, 63, 0.6);
+}
+
 .numpad-display {
   font-size: 2.4rem;
   font-weight: 900;
@@ -792,6 +923,85 @@ h2 {
 
 .title-card.unlocked .title-card-name {
   color: #ffd23f;
+}
+
+.stats-btn {
+  position: relative;
+  margin-top: 16px;
+  background: linear-gradient(180deg, #ffd23f 0%, #e0a91c 100%);
+  box-shadow: 0 6px 0 #8a5f0a, 0 0 18px rgba(255, 210, 63, 0.5);
+  color: #402c00;
+}
+
+.stats-btn:active {
+  box-shadow: 0 2px 0 #8a5f0a, 0 0 10px rgba(255, 210, 63, 0.5);
+}
+
+.stats-btn::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 20px;
+  background: radial-gradient(circle, rgba(255, 210, 63, 0.55) 0%, rgba(255, 210, 63, 0) 70%);
+  z-index: -1;
+  animation: statsGlowPulse 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes statsGlowPulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.94); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+
+.stats-btn-sub {
+  font-size: 0.8rem;
+  font-weight: normal;
+  color: #6b4a05;
+}
+
+.stats-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.stats-row {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #202a52;
+  border: 2px solid #3a4a8a;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  text-align: left;
+}
+
+.stats-date {
+  font-size: 1rem;
+  font-weight: 900;
+  color: #ffd23f;
+  min-width: 100%;
+}
+
+.stats-subject-score {
+  font-size: 0.95rem;
+  color: #eef1fb;
+}
+
+.stats-crown {
+  filter: drop-shadow(0 0 4px rgba(255, 210, 63, 0.7));
+}
+
+.stats-empty {
+  color: #9db3e8;
+  font-size: 1rem;
+  text-align: center;
+  padding: 24px 0;
 }
 
 @media (min-width: 600px) {

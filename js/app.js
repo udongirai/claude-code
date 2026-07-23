@@ -93,6 +93,40 @@
     return true;
   }
 
+  // 「せいせき」用：日付ごとの こくご/さんすう 正回数の記録
+  function todayKey() {
+    var d = new Date();
+    var m = String(d.getMonth() + 1);
+    var day = String(d.getDate());
+    return d.getFullYear() + "-" + (m.length < 2 ? "0" + m : m) + "-" + (day.length < 2 ? "0" + day : day);
+  }
+
+  function loadDailyStats() {
+    try {
+      return JSON.parse(localStorage.getItem("gakushu_daily_stats") || "{}");
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function recordDailyResult(subject, correctCount) {
+    if (!correctCount) {
+      return;
+    }
+    var stats = loadDailyStats();
+    var key = todayKey();
+    if (!stats[key]) {
+      stats[key] = { sansu: 0, kokugo: 0 };
+    }
+    stats[key][subject] = (stats[key][subject] || 0) + correctCount;
+    localStorage.setItem("gakushu_daily_stats", JSON.stringify(stats));
+  }
+
+  function formatDateLabel(key) {
+    var parts = key.split("-");
+    return Number(parts[1]) + "がつ" + Number(parts[2]) + "にち";
+  }
+
   // 書き順れんしゅうの「ロボット組み立て」進捗（5問で1体完成）
   function addRobotPiece() {
     var progress = Number(localStorage.getItem("gakushu_robot_progress") || 0);
@@ -124,7 +158,9 @@
     Object.keys(SUBJECTS).forEach(function (key) {
       html += '<button type="button" class="big-btn subject-btn" data-subject="' + key + '">' + SUBJECTS[key].title + '</button>';
     });
-    html += '</div><button type="button" class="back-btn" id="titlesBtn">しょうごうずかん</button></div>';
+    html += '</div><button type="button" class="big-btn stats-btn" id="statsBtn">👑 せいせき' +
+      '<span class="stats-btn-sub">きょうの きろくを みてみよう！</span></button>' +
+      '<button type="button" class="back-btn" id="titlesBtn">しょうごうずかん</button></div>';
     app.innerHTML = html;
     app.querySelectorAll(".subject-btn").forEach(function (btn) {
       btn.addEventListener("click", function () {
@@ -132,6 +168,51 @@
       });
     });
     document.getElementById("titlesBtn").addEventListener("click", showTitles);
+    document.getElementById("statsBtn").addEventListener("click", showStats);
+  }
+
+  function showStats() {
+    var stats = loadDailyStats();
+    var dates = Object.keys(stats).sort().reverse();
+
+    var bestKokugoDate = null;
+    var bestKokugoVal = 0;
+    var bestSansuDate = null;
+    var bestSansuVal = 0;
+    dates.forEach(function (key) {
+      var s = stats[key];
+      if ((s.kokugo || 0) > bestKokugoVal) {
+        bestKokugoVal = s.kokugo || 0;
+        bestKokugoDate = key;
+      }
+      if ((s.sansu || 0) > bestSansuVal) {
+        bestSansuVal = s.sansu || 0;
+        bestSansuDate = key;
+      }
+    });
+
+    var html = '<div class="screen"><h2>せいせき</h2>';
+    if (dates.length === 0) {
+      html += '<div class="stats-empty">まだ きろくが ないよ。もんだいを といてみよう！</div>';
+    } else {
+      html += '<div class="stats-list">';
+      dates.forEach(function (key) {
+        var s = stats[key];
+        var kokugoCrown = key === bestKokugoDate && bestKokugoVal > 0;
+        var sansuCrown = key === bestSansuDate && bestSansuVal > 0;
+        html += '<div class="stats-row">';
+        html += '<div class="stats-date">' + formatDateLabel(key) + '</div>';
+        html += '<div class="stats-subject-score">こくご ' + (s.kokugo || 0) + 'もん' +
+          (kokugoCrown ? ' <span class="stats-crown">👑</span>' : '') + '</div>';
+        html += '<div class="stats-subject-score">さんすう ' + (s.sansu || 0) + 'もん' +
+          (sansuCrown ? ' <span class="stats-crown">👑</span>' : '') + '</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+    html += '<button type="button" class="back-btn" id="backBtn">もどる</button></div>';
+    app.innerHTML = html;
+    document.getElementById("backBtn").addEventListener("click", showSubjectMenu);
   }
 
   function showTitles() {
@@ -188,6 +269,7 @@
     var questions = unit.getQuestions();
     Quiz.start(quizArea, questions, function (score, total, maxCombo, monsterHp) {
       saveBestScore(unitId, score);
+      recordDailyResult(unit.subject, score);
       showResult(unitId, score, total, maxCombo, monsterHp);
     });
   }
@@ -299,7 +381,10 @@
       onNext: function () {
         showKanjiStrokePracticeRandom(unitId, kanji);
       },
-      onComplete: addRobotPiece
+      onComplete: function () {
+        recordDailyResult("kokugo", 1);
+        return addRobotPiece();
+      }
     });
   }
 
