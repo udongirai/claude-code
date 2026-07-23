@@ -1,5 +1,6 @@
 var StrokePractice = (function () {
   var ROBOT_PARTS = ["legs", "body", "arm-l", "arm-r", "head"];
+  var ROBOT_DRAW_ORDER = ["legs", "arm-l", "arm-r", "body", "head"];
   var ROBOT_THEMES = [
     { main: "#3a8bff", accent: "#1b5fd9" },
     { main: "#ff5a5a", accent: "#d7263d" },
@@ -7,6 +8,50 @@ var StrokePractice = (function () {
     { main: "#ffd23f", accent: "#e0a91c" },
     { main: "#c17bff", accent: "#7c3fd9" }
   ];
+
+  var ROBOT_GLOW = "#f4f8ff";
+
+  var ROBOT_PART_SVG = {
+    "legs":
+      '<rect x="46" y="88" width="8" height="10" fill="var(--robot-accent)"/>' +
+      '<path d="M28,92 L44,92 L44,104 L30,104 Z" fill="var(--robot-main)" stroke="var(--robot-accent)" stroke-width="1.5"/>' +
+      '<path d="M27,104 L47,104 L49,120 L25,120 Z" fill="var(--robot-main)" stroke="var(--robot-accent)" stroke-width="1.5"/>' +
+      '<rect x="26" y="112" width="22" height="3" fill="var(--robot-accent)"/>' +
+      '<path d="M56,92 L72,92 L70,104 L56,104 Z" fill="var(--robot-main)" stroke="var(--robot-accent)" stroke-width="1.5"/>' +
+      '<path d="M53,104 L73,104 L75,120 L51,120 Z" fill="var(--robot-main)" stroke="var(--robot-accent)" stroke-width="1.5"/>' +
+      '<rect x="52" y="112" width="22" height="3" fill="var(--robot-accent)"/>',
+    "arm-l":
+      '<circle cx="12" cy="53" r="6" fill="var(--robot-main)" stroke="var(--robot-accent)" stroke-width="1.5"/>' +
+      '<path d="M5,56 L18,56 L17,68 L6,68 Z" fill="var(--robot-main)" stroke="var(--robot-accent)" stroke-width="1.5"/>' +
+      '<path d="M6,70 L17,70 L16,84 L7,84 Z" fill="var(--robot-main)" stroke="var(--robot-accent)" stroke-width="1.5"/>' +
+      '<rect x="5" y="83" width="13" height="6" rx="1.5" fill="var(--robot-accent)"/>',
+    "arm-r":
+      '<g transform="translate(100,0) scale(-1,1)">' +
+      '<circle cx="12" cy="53" r="6" fill="var(--robot-main)" stroke="var(--robot-accent)" stroke-width="1.5"/>' +
+      '<path d="M5,56 L18,56 L17,68 L6,68 Z" fill="var(--robot-main)" stroke="var(--robot-accent)" stroke-width="1.5"/>' +
+      '<path d="M6,70 L17,70 L16,84 L7,84 Z" fill="var(--robot-main)" stroke="var(--robot-accent)" stroke-width="1.5"/>' +
+      '<rect x="5" y="83" width="13" height="6" rx="1.5" fill="var(--robot-accent)"/>' +
+      '</g>',
+    "body":
+      '<path d="M25,46 L75,46 L73,60 L70,84 L60,88 L40,88 L30,84 L27,60 Z" fill="var(--robot-main)" stroke="var(--robot-accent)" stroke-width="1.5"/>' +
+      '<path d="M16,44 L32,44 L30,56 L17,58 Z" fill="var(--robot-accent)"/>' +
+      '<path d="M84,44 L68,44 L70,56 L83,58 Z" fill="var(--robot-accent)"/>' +
+      '<path d="M50,52 L56,60 L50,68 L44,60 Z" fill="' + ROBOT_GLOW + '"/>' +
+      '<rect x="35" y="72" width="30" height="2.5" fill="var(--robot-accent)" opacity="0.8"/>' +
+      '<rect x="37" y="78" width="26" height="2.5" fill="var(--robot-accent)" opacity="0.8"/>',
+    "head":
+      '<path d="M50,18 L48,1 L52,1 Z" fill="var(--robot-accent)"/>' +
+      '<path d="M44,19 L34,5 L41,19 Z" fill="var(--robot-accent)"/>' +
+      '<path d="M56,19 L66,5 L59,19 Z" fill="var(--robot-accent)"/>' +
+      '<path d="M35,18 L65,18 L67,25 L67,34 L62,40 L38,40 L33,34 L33,25 Z" fill="var(--robot-main)" stroke="var(--robot-accent)" stroke-width="1.5"/>' +
+      '<rect x="31" y="25" width="4" height="7" rx="1" fill="var(--robot-accent)"/>' +
+      '<rect x="65" y="25" width="4" height="7" rx="1" fill="var(--robot-accent)"/>' +
+      '<rect x="37" y="27" width="9" height="4" fill="' + ROBOT_GLOW + '"/>' +
+      '<rect x="54" y="27" width="9" height="4" fill="' + ROBOT_GLOW + '"/>' +
+      '<rect x="44" y="35" width="3" height="4" fill="var(--robot-accent)"/>' +
+      '<rect x="48.5" y="35" width="3" height="4" fill="var(--robot-accent)"/>' +
+      '<rect x="53" y="35" width="3" height="4" fill="var(--robot-accent)"/>'
+  };
 
   var CONFETTI_COLORS = ["#ffd23f", "#ff5a5a", "#3a8bff", "#4ee08a", "#c17bff", "#ff9f4a", "#4adede"];
 
@@ -29,16 +74,20 @@ var StrokePractice = (function () {
       return "";
     }
     var theme = ROBOT_THEMES[robotState.index % ROBOT_THEMES.length];
-    var partsHtml = ROBOT_PARTS.slice(0, robotState.progress).map(function (part) {
-      return '<div class="robot-part robot-' + part + '" style="background:' + theme.main + ';border-color:' + theme.accent + '"></div>';
+    var unlocked = ROBOT_PARTS.slice(0, robotState.progress);
+    var partsHtml = ROBOT_DRAW_ORDER.filter(function (part) {
+      return unlocked.indexOf(part) !== -1;
+    }).map(function (part) {
+      return '<g class="robot-part-svg robot-part-' + part + '">' + ROBOT_PART_SVG[part] + '</g>';
     }).join("");
+    var svgHtml = '<svg class="robot-svg" viewBox="-15 0 130 130" style="--robot-main:' + theme.main + ';--robot-accent:' + theme.accent + '">' + partsHtml + '</svg>';
     var celebrate = robotState.justCompleted;
     var html = '<div class="robot-reward' + (celebrate ? " robot-complete" : "") + '">';
     if (celebrate) {
       html += '<div class="robot-burst"></div>';
       html += '<div class="confetti">' + renderConfetti() + '</div>';
     }
-    html += '<div class="robot-wrap">' + partsHtml + '</div>';
+    html += '<div class="robot-wrap">' + svgHtml + '</div>';
     html += '<div class="robot-caption' + (celebrate ? " robot-caption-complete" : "") + '">' +
       (celebrate ? "ロボット かんせい！！" : "ロボット くみたてちゅう " + robotState.progress + " / 5") +
       '</div>';
