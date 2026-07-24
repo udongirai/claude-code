@@ -85,7 +85,11 @@ var Quiz = (function () {
         box.textContent = "✕ おしい！ こたえは " + correctAnswer;
         box.className = "quiz-feedback incorrect";
       }
-      setTimeout(next, 1200);
+      var correctBtn = container.querySelector('.choice-btn[data-choice="' + escapeAttr(correctAnswer) + '"]');
+      if (!isCorrect && correctBtn) {
+        correctBtn.classList.add("reveal-correct");
+      }
+      setTimeout(next, isCorrect ? 1200 : 2400);
     }
 
     function renderHissan(q) {
