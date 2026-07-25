@@ -9,14 +9,20 @@
   });
 
   var UNITS = {
+    "kuku-table": {
+      title: "九九の おぼえひょう",
+      subject: "sansu",
+      isStudy: true,
+      studyType: "kuku-table"
+    },
     "kuku-study": {
-      title: "九九をおぼえる",
+      title: "九九のれんしゅう",
       subject: "sansu",
       isStudy: true,
       studyType: "kuku"
     },
     kuku: {
-      title: "九九のれんしゅう",
+      title: "かけざん",
       subject: "sansu",
       getQuestions: function () { return DataKuku.getQuestions(10); }
     },
@@ -49,7 +55,7 @@
   };
 
   var SUBJECTS = {
-    sansu: { title: "さんすう", units: ["kuku-study", "kuku", "keisan"] },
+    sansu: { title: "さんすう", units: ["kuku-table", "kuku-study", "kuku", "keisan"] },
     kokugo: { title: "こくご", units: ["kanji-stroke-practice", "kanji-reading", "kanji-writing", "dokkai"] }
   };
 
@@ -253,6 +259,8 @@
     if (unit.isStudy) {
       if (unit.studyType === "kanji-stroke-practice") {
         showKanjiStrokePracticeRandom(unitId);
+      } else if (unit.studyType === "kuku-table") {
+        showKukuTable(unitId);
       } else {
         showKukuStudyDanList(unitId);
       }
@@ -271,6 +279,56 @@
       saveBestScore(unitId, score);
       recordDailyResult(unit.subject, score);
       showResult(unitId, score, total, maxCombo, monsterHp);
+    });
+  }
+
+  var KUKU_TABLE_THEMES = [
+    { main: "#3a8bff", accent: "#9dc4ff" },
+    { main: "#ff5a5a", accent: "#ffb3b3" },
+    { main: "#4ee08a", accent: "#a8f0c6" },
+    { main: "#ffd23f", accent: "#ffe9a8" },
+    { main: "#c17bff", accent: "#e0c4ff" }
+  ];
+
+  var kukuTableAudio = null;
+
+  function showKukuTable(unitId) {
+    var html = '<div class="screen"><h2>九九の おぼえひょう</h2>' +
+      '<div class="kuku-table">';
+    for (var dan = 1; dan <= 9; dan++) {
+      var theme = KUKU_TABLE_THEMES[(dan - 1) % KUKU_TABLE_THEMES.length];
+      html += '<div class="kuku-table-dan" style="--dan-main:' + theme.main + ';--dan-accent:' + theme.accent + '">';
+      html += '<div class="kuku-table-dan-title">' +
+        '<span class="kuku-table-dan-badge">' + dan + '</span>' +
+        dan + ' の だん' +
+        '<span class="kuku-table-dan-star">★</span>' +
+        '</div>';
+      for (var i = 1; i <= 9; i++) {
+        var yomi = DataKukuYomi.get(dan, i);
+        html += '<div class="kuku-table-row">' +
+          '<span class="kuku-table-eq">' + dan + ' × ' + i + ' = ' + (dan * i) + '</span>' +
+          '<span class="kuku-table-yomi">' + yomi.pre + ' ' + yomi.ans + '</span>' +
+          '</div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+    html += '<button type="button" class="back-btn" id="backBtn">メニューに もどる</button></div>';
+    app.innerHTML = html;
+
+    kukuTableAudio = new Audio("audio/kuku-table-bgm.mp3");
+    kukuTableAudio.loop = true;
+    kukuTableAudio.volume = 0.5;
+    kukuTableAudio.play().catch(function () {
+      // 自動再生がブロックされた場合は何もしない（無音のままでも操作に支障はない）
+    });
+
+    document.getElementById("backBtn").addEventListener("click", function () {
+      if (kukuTableAudio) {
+        kukuTableAudio.pause();
+        kukuTableAudio = null;
+      }
+      showUnitMenu(UNITS[unitId].subject);
     });
   }
 
