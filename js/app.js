@@ -10,7 +10,7 @@
 
   var UNITS = {
     "kuku-table": {
-      title: "九九の おぼえひょう",
+      title: "ここで九九が おぼえられるよ",
       subject: "sansu",
       isStudy: true,
       studyType: "kuku-table"
